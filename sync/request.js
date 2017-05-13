@@ -30,7 +30,6 @@ Request.prototype.put = function(path, payload, options) {
 };
 
 Request.prototype.request = function request(path, options) {
-  var deferred = P.defer();
   var xhr = new XHR();
   var uri = this.baseUrl + path;
   var credentials = options.credentials || this.credentials;
@@ -39,45 +38,45 @@ Request.prototype.request = function request(path, options) {
   if (options.json) {
     payload = JSON.stringify(options.json);
   }
+  return new Promise((resolve, reject) => {
+    xhr.open(options.method, uri);
+    xhr.onerror = function onerror() {
+      reject(xhr.responseText);
+    };
+    xhr.onload = function onload() {
+      var result;
+      if (xhr.responseText === 'Unauthorized') { 
+        return reject(xhr.responseText);
+      }
 
-  xhr.open(options.method, uri);
-  xhr.onerror = function onerror() {
-    deferred.reject(xhr.responseText);
-  };
-  xhr.onload = function onload() {
-    var result;
-    if (xhr.responseText === 'Unauthorized') return deferred.reject(xhr.responseText);
-    try {
-      result = JSON.parse(xhr.responseText);
-    } catch (e) {
-      return deferred.reject(xhr.responseText);
+      try {
+        result = JSON.parse(xhr.responseText);
+      } catch (e) {
+        return reject(xhr.responseText);
+      }
+      if (result.error || xhr.status >= 400) {
+        return reject(result);
+      }
+      resolve(result);
+    };
+
+    // calculate Hawk header if credentials are supplied
+    if (credentials) {
+      var authHeader = hawkClient.header(uri, options.method, {
+                          credentials: credentials,
+                          payload: payload,
+                          contentType: "application/json"
+                        });
+      xhr.setRequestHeader("authorization", authHeader.field);
     }
-    if (result.error || xhr.status >= 400) {
-      return deferred.reject(result);
+
+    for (var header in options.headers) {
+      xhr.setRequestHeader(header, options.headers[header]);
     }
-    deferred.resolve(result);
-  };
 
-
-  // calculate Hawk header if credentials are supplied
-  if (credentials) {
-    var authHeader = hawkClient.header(uri, options.method, {
-                        credentials: credentials,
-                        payload: payload,
-                        contentType: "application/json"
-                      });
-    xhr.setRequestHeader("authorization", authHeader.field);
-  }
-
-  for (var header in options.headers) {
-    xhr.setRequestHeader(header, options.headers[header]);
-  }
-
-  xhr.setRequestHeader("Content-Type", "application/json");
-
-  xhr.send(payload);
-
-  return deferred.promise;
+    xhr.setRequestHeader("Content-Type", "application/json");
+    xhr.send(payload);
+  });
 };
 
 return Request;

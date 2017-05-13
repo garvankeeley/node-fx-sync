@@ -5,12 +5,12 @@ if (!xhr) xhr = require('xmlhttprequest').XMLHttpRequest;
 if (!jwcrypto) {
   jwcrypto = require('browserid-crypto');
   require("browserid-crypto/lib/algs/ds");
-require("browserid-crypto/lib/algs/rs");
+  require("browserid-crypto/lib/algs/rs");
 
   //require("jwcrypto/lib/algs/rs");
   //require("jwcrypto/lib/algs/ds");
 }
-if (!P) P = require('p-promise');
+//if (!P) P = require('p-promise');
 if (!FxAccountsClient) FxAccountsClient = require('fxa-js-client');
 
 var certDuration = 3600 * 24 * 365;
@@ -34,20 +34,48 @@ function FxUser(creds, options) {
 
 FxUser.prototype.auth = function() {
   var self = this;
-  var creds;
-  return this.client.signIn(
-      this.email,
-      this.password,
-      { keys: true }
-    )
-    .then(function (creds) {
-      self.creds = creds;
-      return self.client.accountKeys(creds.keyFetchToken, creds.unwrapBKey);
+  const credsFile = '/tmp/creds.json';
+  // try read creds, if have them, return
+  try {
+    var diskCreds = require('fs').readFileSync(credsFile).toString();
+    this.creds = JSON.parse(diskCreds);
+    return Promise.resolve(this);
+  } catch (e) {}
+
+  const signInOk = (creds) => {
+    self.creds = creds;
+    return self.client.accountKeys(creds.keyFetchToken, creds.unwrapBKey);
+  };
+  return this.client.signIn(this.email, this.password, { keys: true })
+    .then(signInOk, err => {
+      console.log('signin fail:' + err.message);
+      this.client.sendUnblockCode(this.email);
+
+      return new Promise((resolve, reject) => {
+        const unblocker = () => {
+          var fs = require('fs');
+          var path = '/tmp/unblocker';
+          try {
+            const buffer = fs.readFileSync(path);
+            const unblockCode = buffer.toString();
+            console.log('unblocker: ' + unblockCode);
+            resolve(this.client.signIn(this.email, this.password, { keys: true, unblockCode: unblockCode })
+              .then(signInOk));
+          } catch (e) {
+            console.log('wait for code in ' + path);
+            setTimeout(unblocker, 1000);
+          }
+        };
+        unblocker();
+      });
     })
     .then(function (result) {
       self.creds.kB = result.kB;
       self.creds.kA = result.kA;
+      require('fs').writeFileSync(credsFile, JSON.stringify(self.creds), 'utf-8');
       return self;
+    }, err => {
+      console.log(err.message);
     });
 };
 
@@ -81,26 +109,24 @@ FxUser.prototype.setup = function() {
       function (creds) {
         // set the sync key
         self.syncKey = Buffer(creds.kB, 'hex');
-        var deferred = P.defer();
-        // upon allocation of a user, we'll gen a keypair and get a signed cert
-        jwcrypto.generateKeypair({ algorithm: "DS", keysize: 256 }, function(err, kp) {
-          if (err) return deferred.reject(err);
+        return new Promise((resolve, reject) => {
+          // upon allocation of a user, we'll gen a keypair and get a signed cert
+          jwcrypto.generateKeypair({ algorithm: "DS", keysize: 256 }, function(err, kp) {
+            if (err) return reject(err);
+            var duration = self.options.certDuration || certDuration;
+            self._keyPair = kp;
+            var expiration = +new Date() + duration;
 
-          var duration = self.options.certDuration || certDuration;
-
-          self._keyPair = kp;
-          var expiration = +new Date() + duration;
-
-          self.client.certificateSign(self.creds.sessionToken, kp.publicKey.toSimpleObject(), duration)
-            .done(
-              function (cert) {
-                self._cert = cert.cert;
-                deferred.resolve(self);
-              },
-              deferred.reject
-            );
+            self.client.certificateSign(self.creds.sessionToken, kp.publicKey.toSimpleObject(), duration)
+              .then(
+                function (cert) {
+                  self._cert = cert.cert;
+                  resolve(self);
+                },
+                reject
+              );
+          });
         });
-        return deferred.promise;
       }
     );
 };
@@ -119,26 +145,24 @@ FxUser.prototype.getCert = function(keyPair) {
     );
 };
 
-FxUser.prototype.getAssertion = function(audience, duration) {
-  var deferred = P.defer();
+FxUser.prototype.getAssertion = function (audience, duration) {
   var self = this;
-  var expirationDate = +new Date() + (typeof duration !== 'undefined' ?  duration : 60 * 60 * 1000);
+  var expirationDate = +new Date() + (typeof duration !== 'undefined' ? duration : 60 * 60 * 1000);
+  return new Promise((resolve, reject) => {
+    jwcrypto.assertion.sign({},
+      {
+        audience: audience,
+        issuer: this.options.fxaServerUrl,
+        expiresAt: expirationDate
+      },
+      this._keyPair.secretKey,
+      (err, signedObject) => {
+        if (err) return reject(err);
 
-  jwcrypto.assertion.sign({},
-    {
-      audience: audience,
-      issuer: this.options.fxaServerUrl,
-      expiresAt: expirationDate
-    },
-    this._keyPair.secretKey,
-    function(err, signedObject) {
-      if (err) return deferred.reject(err);
-
-      var backedAssertion = jwcrypto.cert.bundle([self._cert], signedObject);
-      deferred.resolve(backedAssertion);
-    });
-
-  return deferred.promise;
+        var backedAssertion = jwcrypto.cert.bundle([self._cert], signedObject);
+        resolve(backedAssertion);
+      });
+  });
 };
 
 return FxUser;

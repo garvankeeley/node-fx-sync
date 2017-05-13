@@ -1,6 +1,5 @@
 module.exports = function(P, HKDF, crypto) {
 
-if (!P) P = require('p-promise');
 if (!HKDF) HKDF = require('hkdf');
 if (!crypto) crypto = require('crypto');
 
@@ -68,16 +67,16 @@ function kw(name) {
 }
 
 function hkdf(km, info, salt, len) {
-  var d = P.defer()
-  var df = new HKDF('sha256', salt, km)
-  df.derive(
-    kw(info),
-    len,
-    function(key) {
-      d.resolve(key)
-    }
-  )
-  return d.promise
+  return new Promise((resolve, reject) => {
+    var df = new HKDF('sha256', salt, km);
+    df.derive(
+      kw(info),
+      len,
+      function(key) {
+        resolve(key);
+      }
+    );
+  });
 }
 
 function computeClientState (bytes) {

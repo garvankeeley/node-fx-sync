@@ -1,9 +1,7 @@
-
-module.exports = function(Request, Crypto, P) {
+module.exports = function (Request, Crypto) {
 
 if (!Request) Request = require('./request')();
 if (!Crypto) Crypto = require('./crypto')();
-if (!P) P = require('p-promise');
 
 /* Sync client
  * Uses the auth flow described here:
@@ -33,16 +31,16 @@ SyncClient.prototype.prepare = function(syncKey) {
 };
 
 SyncClient.prototype._deriveKeys = function(syncKey) {
-  if (!syncKey && this.keyBundle) return P(this.keyBundle);
+  if (!syncKey && this.keyBundle) return Promise.resolve(this.keyBundle);
 
   return Crypto.deriveKeys(syncKey || this.syncKey)
-    .then(function (bundle) {
+    .then(bundle => {
       return this.keyBundle = bundle;
-    }.bind(this));
+    });
 };
 
 SyncClient.prototype._fetchCollectionKeys = function(keyBundle) {
-  if (!keyBundle && this.collectionKeys) return P(this.collectionKeys);
+  if (!keyBundle && this.collectionKeys) return Promise.resolve(this.collectionKeys);
 
   return this.client.get('/storage/crypto/keys')
     .then(function (wbo) {

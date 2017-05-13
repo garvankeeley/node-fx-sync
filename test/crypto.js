@@ -2,9 +2,9 @@ var crypto = require('crypto');
 var assert = require('assert');
 var SyncClient = require('../sync/syncClient')();
 var Crypto = require('../sync/crypto')();
-
+debugger;
 var key, iv, payload;
-
+console.log('HERE');
 function encrypt(plaintext, key, iv) {
   iv = iv.slice(0, 16);
   var cipher = crypto.createCipheriv('aes-256-cbc', key, iv);

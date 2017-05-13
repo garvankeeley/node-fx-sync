@@ -11,15 +11,17 @@ function FxaSyncAuth(syncAuth, options) {
 FxaSyncAuth.prototype.auth = function(creds) {
   var user = new FxaUser(creds, this.options);
   return user.setup()
-    .then(function() {
+    .then(() => {
       this.keys = user.syncKey;
       return user.getAssertion(this.options.audience, this.options.duration);
-    }.bind(this))
-    .then(function(assertion) {
+    })
+    .then(assertion => {
       var clientState = Crypto.computeClientState(user.syncKey);
       return this.syncAuth.auth(assertion, clientState);
-    }.bind(this))
-    .then(function(token) {
+    }, err => {
+      console.log(err.message);
+    })
+    .then(token => {
       return {
         token: token,
         keys: this.keys,
@@ -28,7 +30,7 @@ FxaSyncAuth.prototype.auth = function(creds) {
           keyPair: user._keyPair
         }
       };
-    }.bind(this));
+    });
 };
 
 return FxaSyncAuth;
