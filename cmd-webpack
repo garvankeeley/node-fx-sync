@@ -1,0 +1,1 @@
+ webpack ./index.js bundle.js --output-library MyLibrary --output-library-target umd

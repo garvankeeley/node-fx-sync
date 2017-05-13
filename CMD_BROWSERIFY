@@ -1,0 +1,1 @@
+browserify -r ./sync/index.js:APP --ignore-missing > bfy.js
