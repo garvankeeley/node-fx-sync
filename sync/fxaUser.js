@@ -1,5 +1,5 @@
 
-module.exports = function(xhr, jwcrypto, P, FxAccountsClient) {
+module.exports = function (xhr, jwcrypto) {
 
 if (!xhr) xhr = require('xmlhttprequest').XMLHttpRequest;
 if (!jwcrypto) {
@@ -11,7 +11,13 @@ if (!jwcrypto) {
   //require("jwcrypto/lib/algs/ds");
 }
 //if (!P) P = require('p-promise');
-if (!FxAccountsClient) FxAccountsClient = require('fxa-js-client');
+var FxAccountsClient = null;
+
+if (typeof FxAccountClient === 'undefined') {
+   FxAccountsClient = require('fxa-js-client');
+} else {
+  FxAccountsClient = FxAccountClient; // that is the export name from latest fxa-js-client
+}
 
 var certDuration = 3600 * 24 * 365;
 
@@ -37,9 +43,13 @@ FxUser.prototype.auth = function() {
   const credsFile = '/tmp/creds.json';
   // try read creds, if have them, return
   try {
-    var diskCreds = require('fs').readFileSync(credsFile).toString();
-    this.creds = JSON.parse(diskCreds);
-    return Promise.resolve(this);
+    if (typeof window !== 'undefined') {
+      this.creds = CREDS_PRESET;
+    } else {
+      const diskCreds = require('fs').readFileSync(credsFile).toString();
+      this.creds = JSON.parse(diskCreds);
+      return Promise.resolve(this);
+    }
   } catch (e) {}
 
   const signInOk = (creds) => {
