@@ -1,7 +1,11 @@
 <html>
   <script src='./fxa-client.js'></script>
+  <script src='./pbkdf2-browser.js'></script>
  <script>
 var FxAccountsClient = FxAccountClient;
+crypto.pbkdf2 = PBKDF.pbkdf2;
+crypto.pbkdf2Sync = PBKDF.pbkdf2Sync;
+
 </script>
 
  <script src='./man.js' ></script>

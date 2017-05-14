@@ -1,1 +1,1 @@
-browserify index.js --exclude fxa-js-client --standalone FXA > man.js
+browserify index.js --exclude fxa-js-client --standalone FXA --ignore crypto > man.js
