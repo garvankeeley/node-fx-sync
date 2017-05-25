@@ -1,1 +1,2 @@
-browserify index.js --exclude fxa-js-client --standalone FXA > man.js
+# get fxa lib from its repo build fxa-js-client/build/fxa-client.js
+browserify index.js --exclude fxa-js-client --standalone FXA > fxa-and-sync-browserified.js
